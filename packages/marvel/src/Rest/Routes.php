@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Marvel\Database\Models\Attachment;
 use Marvel\Enums\Permission;
 use Marvel\Http\Controllers\AbusiveReportController;
 use Marvel\Http\Controllers\AddressController;
@@ -80,6 +81,13 @@ Route::post('webhooks/paypal', [WebHookController::class, 'paypal']);
 Route::post('webhooks/mollie', [WebHookController::class, 'mollie']);
 Route::post('webhooks/paystack', [WebHookController::class, 'paystack']);
 Route::get('store-notices', [StoreNoticeController::class, 'index'])->name('store-notices.index');
+
+/** 
+ * ERP Integration
+ * @author DevSyed
+ */
+Route::get('/products/sync-products', [ProductController::class, 'romario_sync_products']);
+Route::post('/attachments/uploadBulkImages', [AttachmentController::class,'storeBulkImages']);
 
 Route::apiResource('products', ProductController::class, [
     'only' => ['index', 'show'],
@@ -275,6 +283,9 @@ Route::group(
 
         Route::get('export-order-url/{shop_id?}', 'Marvel\Http\Controllers\OrderController@exportOrderUrl');
         Route::post('download-invoice-url', 'Marvel\Http\Controllers\OrderController@downloadInvoiceUrl');
+
+
+
     }
 );
 
@@ -297,7 +308,6 @@ Route::group(
         Route::post('staffs', [ShopController::class, 'addStaff']);
         Route::delete('staffs/{id}', [ShopController::class, 'deleteStaff']);
         Route::get('staffs', [UserController::class, 'staffs']);
-        Route::get('my-shops', [ShopController::class, 'myShops']);
         Route::get('/admin/list', [UserController::class, 'admins']);
     }
 );
@@ -378,4 +388,24 @@ Route::group(['middleware' => ['permission:' . Permission::SUPER_ADMIN, 'auth:sa
             'only' => ['destroy', 'update'],
         ]
     );
-});
+
+
+    /** 
+     * @author DevSyed
+     */
+    Route::apiResource('products', ProductController::class, [
+        'only' => ['store', 'update', 'destroy'],
+    ]); 
+
+    Route::apiResource('attributes', AttributeController::class, [
+        'only' => ['store', 'update', 'destroy'],
+    ]);
+    Route::apiResource('attribute-values', AttributeValueController::class, [
+        'only' => ['store', 'update', 'destroy'],
+    ]);
+    Route::apiResource('orders', OrderController::class, [
+        'only' => ['update', 'destroy'],
+    ]);
+
+}); 
+

@@ -380,7 +380,9 @@ class OrderController extends CoreController
                 case PaymentGatewayType::STRIPE:
                     $this->stripe($order, $request, $this->settings);
                     break;
-
+                case PaymentGatewayType::ETISALAT:
+                    $this->etisalat($order,$request,$this->settings);
+                    break;
                 case PaymentGatewayType::PAYPAL:
                     $this->paypal($order, $request, $this->settings);
                     break;

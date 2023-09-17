@@ -142,6 +142,7 @@ class CreateMarvelTables extends Migration
             $table->unsignedBigInteger('logistics_provider')->nullable();
             $table->double('delivery_fee')->nullable();
             $table->string('delivery_time')->nullable();
+            $table->string('romario_tracking_id')->nullable();
             $table->enum(
                 'order_status',
                 [

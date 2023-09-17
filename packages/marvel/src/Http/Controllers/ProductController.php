@@ -4,6 +4,7 @@ namespace Marvel\Http\Controllers;
 
 use Exception;
 use Carbon\Carbon;
+use Cocur\Slugify\Slugify;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
@@ -20,10 +21,16 @@ use Marvel\Database\Repositories\ProductRepository;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Illuminate\Validation\UnauthorizedException;
+use Illuminate\Support\Facades\Http;
+use Marvel\Database\Models\Attribute;
+use Marvel\Database\Models\AttributeValue;
+use Marvel\Database\Models\Category;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends CoreController
 {
     public $repository;
+    private $erp_key = '7pr7y%Rzu0YrngRg6r7f';
 
     public function __construct(ProductRepository $repository)
     {
@@ -497,5 +504,239 @@ class ProductController extends CoreController
         $user = $request->user();
         $wishlist = Wishlist::where('user_id', $user->id)->pluck('product_id');
         return $this->repository->whereIn('id', $wishlist);
+    }
+
+
+    /** 
+     * Sluggify String
+     * @param string
+     * @return string
+     * @author DevSyed
+     */
+    public function slugify_string($string = 'not-found'){
+        return strtolower(str_replace([' ', '/'], ['-', '-'], $string));
+    }
+
+
+    /** 
+     * Create Product and Category Relationship.
+     */
+    public function create_product_category_relationship($product_id,$category_id)
+    {
+        return DB::table('category_product')->insert([
+            'product_id' => $product_id,
+            'category_id' => $category_id
+        ]);
+    }
+    
+    
+    /** 
+     * Create Product and Attribute Relationship.
+     */
+    public function create_product_attribute($product_id,$attribute_id)
+    {
+        return DB::table('attribute_product')->updateOrInsert(
+            [
+                'product_id' => $product_id,
+                'attribute_value_id' => $attribute_id,
+            ],
+            [
+                'product_id' => $product_id,
+                'attribute_value_id' => $attribute_id,
+            ]
+        );
+    }
+
+    /** 
+     * Create or Update Category
+     */
+    public function getOrCreateCategory($slug, $name) {
+        if(!$slug) return;
+        return Category::firstOrCreate(
+            ['slug' => $slug],
+            ['name' => $name, 'language' => 'en']
+        );
+    }
+
+    /** 
+     * Create or Update Type
+     */
+    public function getOrCreateType($slug, $name) {
+        if(!$slug) return;
+        return Type::firstOrCreate(
+            ['slug' => $slug],
+            ['name' => $name, 'language' => 'en']
+        );
+    }
+    
+
+    public function fetch_products_from_erp()
+    {
+        $products = [];
+        $page = 1;
+        do {
+            $response = Http::withHeaders([
+                'Accept'              => 'application/json',
+                'robotic-erp-api-key' => '7pr7y%Rzu0YrngRg6r7f',
+                'Content-Type'        => 'application/json',
+            ])->post('https://web.romario.online/api/ext-v1/product', [
+                'pageSize' => 'SIZE_100',
+                'pageNo' => $page
+            ]);
+            if (!$response->successful()) {
+                return response()->json(['error' => 'Failed to fetch data'], 500);
+            }
+            $data = json_decode($response->body(),true);
+            $hasMore = $data['hasMore'];
+            $products = array_merge($products, $data['items']);
+            $page++;
+
+        } while ($hasMore);
+        cache(['cached_products' => $products], now()->addHours(24));
+        return $products;
+    }
+
+    /** 
+     * Prepare the Attributes
+     */
+    public function prepare_attribute($slug, $name)
+    {
+        if(!$slug) return;
+        return Attribute::firstOrCreate(
+            ['slug' => $slug],
+            ['name' => $name, 'language' => 'en']
+        );
+    }
+
+    public function create_attribute_value($name,$attribute_id)
+    {
+        return AttributeValue::updateOrCreate([
+            'slug' => $this->slugify_string($name),
+            'attribute_id' => $attribute_id,
+            'value' => $name,
+            'meta' => $this->slugify_string($name)
+        ]);
+    }
+
+
+    public function prepare_uncategorized_brand()
+    {
+        return Type::firstOrCreate(
+            ['slug' => 'not-applicable'],
+            ['name' => 'Not Applicable', 'language' => 'en']
+        );
+    }
+
+
+
+    public function romario_sync_products(Request $request)
+    {
+        // not available brand, so any product with no brand gets put here. 
+        $nat_id = $this->prepare_uncategorized_brand();
+
+        $categories = [];
+        $products = $this->fetch_products_from_erp();
+
+        if(!$products) return response()->json('No Products Found on ERP', 200);
+
+        // Prepare required attributes, since they always will be present and will live.
+        $size_att = $this->prepare_attribute('size','Size');
+        $color_att = $this->prepare_attribute('color','Color');
+
+        foreach($products as $key => $product){
+            $variations = $product['products'];
+            $total_stock = 0;
+            $prices = [];
+
+            $cat_slug = $this->slugify_string($product['category']);
+            $brand_slug = $this->slugify_string($product['brand']);
+            
+            $brand = $this->getOrCreateType($brand_slug,$product['brand']);
+            $category = $this->getOrCreateCategory($cat_slug,$product['category']);
+
+            $create_product = Product::updateOrCreate([
+                'name' => $product['products'][0]['displayName'], // using first variations name. ERP needs fix.
+                'description' => $product['products'][0]['description'], // using first variations name. ERP needs fix.
+                'slug' => $this->slugify_string($product['products'][0]['displayName']),
+                'description' => '',
+                'type_id' => ($brand) ? $brand->id : $nat_id->id,
+                'price' => null,
+                'shop_id' => 1,
+                'product_type' => 'variable',
+                'min_price' => 0, //keep it 0 here. update it later.
+                'max_price' => 0, // keep it 0 here, update it later.
+                'sku' => $product['id'], // should be unique, bulk images work on this.
+                'is_digital' => 0,
+                'status' => 'publish'
+            ]);
+
+            // Product - {Category} Relation.
+            $this->create_product_category_relationship($create_product->id,$category->id);
+            
+            // Variations 
+            if($variations){
+                foreach($variations as $variation){
+                    $total_stock += $variation['stockQty'];
+                    $price = $variation['price']['currentAmount'];
+                    $prices[] = $price;
+                    $variationCreate = Variation::updateOrCreate([
+                        'title' => $variation['color'] . '/' . $variation['size'],
+                        'price' => $price,
+                        'language' => 'en',
+                        'quantity' => $variation['stockQty'],
+                        'sku' => $variation['id'],
+                        'product_id' => $create_product->id,
+                        'options' => [
+                            [
+                                'name' => 'Color',
+                                "value" => $variation['color']
+                            ],
+                            [
+                                'name' => 'Size',
+                                'value' => $variation['size']
+                            ]
+                        ]
+                    ]);
+
+                    if(isset($variation['color'])){
+                        $color_att_id = $this->create_attribute_value($variation['color'], $color_att->id);
+                    }
+                    
+                    if(isset($variation['size'])){
+                        $size_att_id = $this->create_attribute_value($variation['size'], $size_att->id);
+                    }
+
+                    $this->create_product_attribute($create_product->id,$color_att_id->id);
+                    $this->create_product_attribute($create_product->id,$size_att_id->id);
+                }
+
+
+                $create_product->quantity = $total_stock;
+                $create_product->unit = 'pcs';
+                $create_product->min_price = min($prices);
+                $create_product->max_price = max($prices);
+                $create_product->save();
+
+                
+            }
+        }
+
+        return response()->json(['All Good, Proceed'],200);
+    }
+
+
+    /** Check Brands */
+    public function check_brands(){
+        $products = cache('cached_products');
+        $var = [];
+        foreach($products as $product){
+            foreach($product['products'] as $variation){
+                if($variation['color'] == '' || $variation['size'] == ''){
+                    $var[] = $variation;
+                }
+            }
+        }
+
+        return $var;
     }
 }

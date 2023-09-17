@@ -11,6 +11,7 @@ use Marvel\Database\Repositories\AttachmentRepository;
 use Marvel\Exceptions\MarvelException;
 use Marvel\Http\Requests\AttachmentRequest;
 use Prettus\Validator\Exceptions\ValidatorException;
+use Illuminate\Support\Facades\File;
 
 
 class AttachmentController extends CoreController
@@ -108,4 +109,7 @@ class AttachmentController extends CoreController
             throw new MarvelException(NOT_FOUND);
         }
     }
+
+
+
 }
