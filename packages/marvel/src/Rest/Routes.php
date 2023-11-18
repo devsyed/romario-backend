@@ -87,7 +87,10 @@ Route::get('store-notices', [StoreNoticeController::class, 'index'])->name('stor
  * @author DevSyed
  */
 Route::get('/products/sync-products', [ProductController::class, 'romario_sync_products']);
+Route::get('/products/count-products', [ProductController::class, 'count_products']);
 Route::post('/attachments/uploadBulkImages', [AttachmentController::class,'storeBulkImages']);
+Route::get('/orders/mark_order_as_pending/',[OrderController::class,'mark_order_as_pending']);
+Route::get('/orders/remove_last_order/',[OrderController::class,'remove_last_order']);
 
 Route::apiResource('products', ProductController::class, [
     'only' => ['index', 'show'],
@@ -385,7 +388,7 @@ Route::group(['middleware' => ['permission:' . Permission::SUPER_ADMIN, 'auth:sa
         'refunds',
         RefundController::class,
         [
-            'only' => ['destroy', 'update'],
+            'only' => ['show','index','store','destroy', 'update'],
         ]
     );
 
@@ -408,4 +411,11 @@ Route::group(['middleware' => ['permission:' . Permission::SUPER_ADMIN, 'auth:sa
     ]);
 
 }); 
+Route::apiResource(
+    'refunds',
+    RefundController::class,
+    [
+        'only' => ['index', 'store', 'show'],
+    ]
+);
 

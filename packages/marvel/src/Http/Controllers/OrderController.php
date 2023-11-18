@@ -28,6 +28,7 @@ use Marvel\Traits\PaymentStatusManagerWithOrderTrait;
 use Marvel\Traits\PaymentTrait;
 use Marvel\Traits\TranslationTrait;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Illuminate\Support\Facades\Http;
 
 class OrderController extends CoreController
 {
@@ -96,6 +97,7 @@ class OrderController extends CoreController
             throw new MarvelException(SOMETHING_WENT_WRONG, $th->getMessage());
         }
     }
+
 
     /**
      * Display the specified resource.
@@ -401,5 +403,65 @@ class OrderController extends CoreController
         } catch (MarvelException $e) {
             throw new MarvelException(SOMETHING_WENT_WRONG, $e->getMessage());
         }
+    }
+
+
+    /** 
+     * Get the Last proceesed order for Customer.
+     * @return order_id
+     */
+    public function mark_order_as_pending(Request $request)
+    {
+        $user = $request->user() ?? null;
+        $user_id = $user->id;
+        $order = Order::where('customer_id', $user_id)->latest('created_at')->first();
+        if($order){
+            $order->order_status = 'order-processing';
+        $order->save();
+        }
+
+        $sub_order = Order::where('parent_id', $order->id)->latest('created_at')->first();
+        if($sub_order){
+            $sub_order->order_status = 'order-processing';
+        $sub_order->save();
+        }
+        return response()->json('Order marked pending successfully',200);
+    }
+
+
+    /** 
+     * Send Order to ERP 
+     * 
+     */
+    public static function romario_create_sale_in_erp()
+    {
+        try {
+
+            $response = Http::withHeaders([
+                
+            ])->post('https://web.romario.online/api/ext-v1/new-sale', [
+                'customerName' => $request->customer_name,
+            ]);
+            if (!$response->successful()) {
+                return response()->json(['error' => 'Failed to fetch data'], 500);
+            }
+            $data = json_decode($response->body(),true);
+        } catch (MarvelException $th) {
+            throw new MarvelException(SOMETHING_WENT_WRONG, $th->getMessage());
+        }
+    }
+
+
+    /** 
+     * Remove Last Order
+     */
+    public static function remove_last_order(Request $request)
+    {
+        $user = $request->user() ?? null;
+        $user_id = $user->id;
+        $order = Order::where('customer_id', $user_id)->latest('created_at')->first();
+        if(!$order) return response()->json('No Order was processed',200);
+        $order->delete();
+        return response()->json('Order removed');
     }
 }

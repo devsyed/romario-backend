@@ -45,7 +45,7 @@ class BulkImagesController extends Controller
             foreach ($chunks as $chunk) {
                 foreach ($chunk as $image) {
                     $image_name = $image->getClientOriginalName();
-                    $product_sku = explode('-', $image_name)[0];
+                    $product_sku = explode('_', $image_name)[0];
                     $product = Product::where('sku', $product_sku)->first();
                     if(!$product) continue;
                     $uploadedImages[] = $product->name;
@@ -79,27 +79,27 @@ class BulkImagesController extends Controller
                         $bulk_image->thumbnail_path = $converted_url['thumbnail'];
                     }
                     $urls[] = $converted_url;
-                    $product->image = $urls[0];
                     $product->save();
 
                     $productImageArrays[$product->id][] = $converted_url;
 
                     $bulk_image->save();
                 }
-
                 foreach ($productImageArrays as $productId => $imageArray) {
                     $product = Product::find($productId);
                     if(!$product) continue;
+                    $product->image = $imageArray[0];
                     $product->gallery = (!empty($product->gallery)) ? array_merge($product->gallery, $imageArray) : $imageArray;
                     $product->save();
                 }
+                
             }
         } catch (\Exception $err) {
             Log::error($err);
             return response()->json(['message' => 'An error occurred. Please check the logs for more information.'], 500);
         }
 
-        return response()->json($productImageArrays, 200);
+        return response()->json(['message' => 'Images uploaded and set successfully.'], 200);
     }
 
 }

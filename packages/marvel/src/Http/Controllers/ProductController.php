@@ -573,11 +573,11 @@ class ProductController extends CoreController
     public function fetch_products_from_erp()
     {
         $products = [];
-        $page = 1;
+        $page = 0;
         do {
             $response = Http::withHeaders([
                 'Accept'              => 'application/json',
-                'robotic-erp-api-key' => '7pr7y%Rzu0YrngRg6r7f',
+                'robotic-erp-api-key' => $this->erp_key,
                 'Content-Type'        => 'application/json',
             ])->post('https://web.romario.online/api/ext-v1/product', [
                 'pageSize' => 'SIZE_100',
@@ -610,7 +610,7 @@ class ProductController extends CoreController
 
     public function create_attribute_value($name,$attribute_id)
     {
-        return AttributeValue::updateOrCreate([
+        return AttributeValue::updateOrCreate(['slug' => $this->slugify_string($name)],[
             'slug' => $this->slugify_string($name),
             'attribute_id' => $attribute_id,
             'value' => $name,
@@ -655,9 +655,11 @@ class ProductController extends CoreController
             $category = $this->getOrCreateCategory($cat_slug,$product['category']);
 
             $create_product = Product::updateOrCreate([
+                'sku' => $product['id']
+            ],[
                 'name' => $product['products'][0]['displayName'], // using first variations name. ERP needs fix.
                 'description' => $product['products'][0]['description'], // using first variations name. ERP needs fix.
-                'slug' => $this->slugify_string($product['products'][0]['displayName']),
+                'slug' => $this->slugify_string($product['products'][0]['detail']),
                 'description' => '',
                 'type_id' => ($brand) ? $brand->id : $nat_id->id,
                 'price' => null,
@@ -680,6 +682,8 @@ class ProductController extends CoreController
                     $price = $variation['price']['currentAmount'];
                     $prices[] = $price;
                     $variationCreate = Variation::updateOrCreate([
+                        'sku' => $variation['id'],
+                    ],[
                         'title' => $variation['color'] . '/' . $variation['size'],
                         'price' => $price,
                         'language' => 'en',
@@ -726,17 +730,12 @@ class ProductController extends CoreController
 
 
     /** Check Brands */
-    public function check_brands(){
-        $products = cache('cached_products');
-        $var = [];
+    public function count_products(){
+        $products = $this->fetch_products_from_erp();
+        $total_variations = 0;
         foreach($products as $product){
-            foreach($product['products'] as $variation){
-                if($variation['color'] == '' || $variation['size'] == ''){
-                    $var[] = $variation;
-                }
-            }
+            $total_variations += count($product['products']);
         }
-
-        return $var;
+        return $total_variations;
     }
 }

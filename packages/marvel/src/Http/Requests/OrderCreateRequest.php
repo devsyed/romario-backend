@@ -28,6 +28,7 @@ class OrderCreateRequest extends FormRequest
     public function rules()
     {
         return [
+            'order_status'      => 'nullable|string',
             'coupon_id'         => 'nullable|exists:Marvel\Database\Models\Coupon,id',
             'shop_id'           => 'nullable|exists:Marvel\Database\Models\Shop,id',
             'customer_id'       => 'nullable|exists:Marvel\Database\Models\User,id',

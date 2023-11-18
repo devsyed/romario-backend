@@ -97,6 +97,9 @@ class RefundController extends CoreController
             if (!$request->user()) {
                 throw new AuthorizationException(NOT_AUTHORIZED);
             }
+            $order = Order::where('id', $request['order_id'])->first();
+            $order->order_status = 'order-pending';
+            $order->save();
             return $this->repository->storeRefund($request);
         } catch (MarvelException $th) {
             throw new MarvelException(COULD_NOT_CREATE_THE_RESOURCE);

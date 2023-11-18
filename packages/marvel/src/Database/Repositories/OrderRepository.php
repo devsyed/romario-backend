@@ -182,6 +182,8 @@ class OrderRepository extends BaseRepository
         } else {
             $amount = round($request['paid_total'], 2);
         }
+        $request['order_status'] = 'order-pending';
+        $request['payment_status'] = $request['payment_status'] ? 'paid-online' : 'payment-cash-on-delivery';
 
         $order = $this->createOrder($request);
 
