@@ -383,7 +383,7 @@ class OrderController extends CoreController
                     $this->stripe($order, $request, $this->settings);
                     break;
                 case PaymentGatewayType::ETISALAT:
-                    $this->etisalat($order,$request,$this->settings);
+                    $this->etisalat($order, $request, $this->settings);
                     break;
                 case PaymentGatewayType::PAYPAL:
                     $this->paypal($order, $request, $this->settings);
@@ -415,17 +415,17 @@ class OrderController extends CoreController
         $user = $request->user() ?? null;
         $user_id = $user->id;
         $order = Order::where('customer_id', $user_id)->latest('created_at')->first();
-        if($order){
+        if ($order) {
             $order->order_status = 'order-processing';
-        $order->save();
+            $order->save();
         }
 
         $sub_order = Order::where('parent_id', $order->id)->latest('created_at')->first();
-        if($sub_order){
+        if ($sub_order) {
             $sub_order->order_status = 'order-processing';
-        $sub_order->save();
+            $sub_order->save();
         }
-        return response()->json('Order marked pending successfully',200);
+        return response()->json('Order marked pending successfully', 200);
     }
 
 
@@ -437,15 +437,13 @@ class OrderController extends CoreController
     {
         try {
 
-            $response = Http::withHeaders([
-                
-            ])->post('https://web.romario.online/api/ext-v1/new-sale', [
+            $response = Http::withHeaders([])->post('https://web.romario.online/api/ext-v1/new-sale', [
                 'customerName' => $request->customer_name,
             ]);
             if (!$response->successful()) {
                 return response()->json(['error' => 'Failed to fetch data'], 500);
             }
-            $data = json_decode($response->body(),true);
+            $data = json_decode($response->body(), true);
         } catch (MarvelException $th) {
             throw new MarvelException(SOMETHING_WENT_WRONG, $th->getMessage());
         }
@@ -460,8 +458,16 @@ class OrderController extends CoreController
         $user = $request->user() ?? null;
         $user_id = $user->id;
         $order = Order::where('customer_id', $user_id)->latest('created_at')->first();
-        if(!$order) return response()->json('No Order was processed',200);
+
+        if (!$order) {
+            return response()->json('No Order was processed', 200);
+        }
+        $childOrder = Order::where('parent_id', $order->id)->first();
         $order->delete();
-        return response()->json('Order removed');
+        if ($childOrder) {
+            $childOrder->delete();
+        }
+
+        return response()->json('Order and related child order removed');
     }
 }
